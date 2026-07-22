@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, current_app
+from flask import Flask, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -30,6 +30,7 @@ bot_thread = None
 last_bot_activity = time.time()
 app_initialized = False
 health_check_counter = 0
+bot_initialized = False
 
 # Manejador de señales mejorado para Render.com
 def signal_handler(sig, frame):
@@ -84,12 +85,13 @@ def setup_browser():
 
 def login_kick(driver):
     """Inicia sesión en Kick con tiempos reducidos y anti-detección mejorada"""
+    global bot_initialized
     logging.info("[*] Iniciando sesión en Kick...")
     driver.get("https://kick.com")
     
     # Tiempos reducidos para Render.com (evita "Application exited early")
-    SHORT_TIMEOUT = 8
-    LONG_TIMEOUT = 12
+    SHORT_TIMEOUT = 5
+    LONG_TIMEOUT = 8
     
     try:
         # 1. Busca el botón "Log In" con tiempo reducido
@@ -134,7 +136,7 @@ def login_kick(driver):
             username_field.clear()
             username_field.send_keys(USERNAME)
             logging.info("[+] Usuario ingresado")
-            time.sleep(0.5)
+            time.sleep(0.3)
             
             # Campo de contraseña
             password_field = WebDriverWait(driver, SHORT_TIMEOUT).until(
@@ -143,7 +145,7 @@ def login_kick(driver):
             password_field.clear()
             password_field.send_keys(PASSWORD)
             logging.info("[+] Contraseña ingresada")
-            time.sleep(0.5)
+            time.sleep(0.3)
             
             # Botón de submit
             submit_button = WebDriverWait(driver, SHORT_TIMEOUT).until(
@@ -158,11 +160,12 @@ def login_kick(driver):
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.user-menu, span.user-name, img.avatar"))
                 )
                 logging.info("[+] Sesión iniciada correctamente")
+                bot_initialized = True  # Marca que el bot está inicializado
                 return True
             except:
                 # Verifica si hay mensaje de error
                 try:
-                    error_msg = WebDriverWait(driver, 3).until(
+                    error_msg = WebDriverWait(driver, 2).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR, "div.error, .toast-error"))
                     )
                     logging.error(f"[!] Error de login: {error_msg.text}")
@@ -189,7 +192,7 @@ def is_channel_live(driver):
     
     try:
         # Busca cualquier indicador de que el canal está en vivo
-        live_indicator = WebDriverWait(driver, 10).until(
+        live_indicator = WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div.live-status, span.live, .channel-status, .live-badge"))
         )
         return True
@@ -198,27 +201,28 @@ def is_channel_live(driver):
 
 def keep_page_active(driver):
     """Mantiene la actividad para que tu extensión siga generando puntos"""
+    global last_bot_activity
+    
     # Simula actividad humana cada 30-60 segundos (ajustado para tu extensión)
     actions = ActionChains(driver)
     
     # Movimiento de ratón sutil
     actions.move_by_offset(1, 1).perform()
-    time.sleep(0.5)
+    time.sleep(0.2)
     actions.move_by_offset(-1, -1).perform()
     
     # Pequeño scroll para mantener la página "activa"
-    scroll_amount = 50
+    scroll_amount = 30
     driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-    time.sleep(0.3)
+    time.sleep(0.2)
     driver.execute_script(f"window.scrollBy(0, -{scroll_amount});")
     
-    global last_bot_activity
     last_bot_activity = time.time()
     logging.info(f"[*] Manteniendo actividad en {CHANNEL_NAME} para generar puntos...")
 
 def bot_logic():
     """Lógica principal del bot"""
-    global bot_thread
+    global bot_thread, bot_initialized
     
     driver = None
     try:
@@ -226,8 +230,8 @@ def bot_logic():
         bot_thread.driver = driver  # Guarda la referencia del driver
         
         if not login_kick(driver):
-            logging.error("[!] Login fallido, reiniciando en 30 segundos...")
-            time.sleep(30)
+            logging.error("[!] Login fallido, reiniciando en 15 segundos...")
+            time.sleep(15)
             return  # Esto hará que Render reinicie el servicio
             
         logging.info(f"[*] Monitoreando canal '{CHANNEL_NAME}' (verificación cada {CHECK_INTERVAL} segundos)...")
@@ -239,16 +243,17 @@ def bot_logic():
                 
                 # Navega directamente al canal
                 driver.get(f"https://kick.com/{CHANNEL_NAME}")
-                time.sleep(5)  # Da tiempo a cargar
+                time.sleep(3)  # Da tiempo a cargar
                 
                 # Mantiene actividad mientras el canal está en vivo
                 last_activity = time.time()
                 while is_channel_live(driver):
-                    # Mantén actividad cada 30-60 segundos
-                    if time.time() - last_activity > 45:
+                    # Mantén actividad cada 20-30 segundos (más frecuente para Render.com)
+                    if time.time() - last_activity > 25:
                         keep_page_active(driver)
                         last_activity = time.time()
-                    time.sleep(5)
+                        last_bot_activity = time.time()  # Actualiza la actividad global
+                    time.sleep(3)
             else:
                 logging.info(f"[ ] {CHANNEL_NAME} no está en vivo. Revisando en {CHECK_INTERVAL} segundos...")
                 time.sleep(CHECK_INTERVAL)
@@ -261,24 +266,25 @@ def bot_logic():
             except:
                 pass
         # Reinicia el proceso
-        time.sleep(30)
+        time.sleep(15)
         main()
 
 def health_check():
     """Endpoint para UptimeRobot - mantiene el servicio despierto"""
-    global last_bot_activity, health_check_counter
+    global last_bot_activity, health_check_counter, bot_initialized
     health_check_counter += 1
     current_time = time.time()
     
-    # Si el bot no ha mostrado actividad en los últimos 60 segundos
-    if current_time - last_bot_activity > 60:
-        logging.warning("[!] El bot de Selenium no muestra actividad. Reiniciando...")
+    # Si el bot no ha mostrado actividad en los últimos 45 segundos (más corto para Render.com)
+    if current_time - last_bot_activity > 45:
+        logging.warning(f"[!] El bot de Selenium no muestra actividad desde hace {current_time - last_bot_activity:.1f}s. Reiniciando...")
         # Intenta reiniciar el bot
         global bot_thread
         if bot_thread is None or not bot_thread.is_alive():
             logging.info("[+] Reiniciando el bot de Selenium...")
             bot_thread = Thread(target=bot_logic, daemon=True)
             bot_thread.start()
+            bot_initialized = False
     
     # Actualiza el contador de actividad para mantener el proceso principal ocupado
     activity_log = f"Health check #{health_check_counter} - Bot activity: {time.time() - last_bot_activity:.1f}s ago"
@@ -288,7 +294,8 @@ def health_check():
         "status": "ok",
         "channel": CHANNEL_NAME,
         "last_activity": time.time(),
-        "health_check_count": health_check_counter
+        "health_check_count": health_check_counter,
+        "bot_initialized": bot_initialized
     }, 200
 
 def monitor_bot_health():
@@ -307,11 +314,11 @@ def monitor_bot_health():
             except Exception as e:
                 logging.error(f"[!] Error en monitor_bot_health: {str(e)}")
             
-            time.sleep(30)  # Verifica cada 30 segundos
+            time.sleep(25)  # Verifica cada 25 segundos (más frecuente para Render.com)
 
 def main():
     """Versión mejorada que mantiene actividad constante para Render.com"""
-    global bot_thread, last_bot_activity, app_initialized, health_check_counter
+    global bot_thread, last_bot_activity, app_initialized, health_check_counter, bot_initialized
     
     # Inicia el bot en segundo plano
     bot_thread = Thread(target=bot_logic, daemon=True)
@@ -333,7 +340,7 @@ def main():
     # Inicia un hilo para mantener actividad constante en el proceso principal
     def keep_process_active():
         while True:
-            time.sleep(15)  # Verifica cada 15 segundos
+            time.sleep(10)  # Verifica cada 10 segundos (más frecuente para Render.com)
             logging.info(f"[.] Manteniendo proceso activo (health checks: {health_check_counter})")
     
     activity_thread = Thread(target=keep_process_active, daemon=True)
