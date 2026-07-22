@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, current_app
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -25,9 +25,10 @@ PASSWORD = os.getenv("PASSWORD")
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "forg1")
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "120"))
 
-# Variable global para el bot
+# Variables globales para el estado del bot
 bot_thread = None
 last_bot_activity = time.time()
+app_initialized = False
 
 # Manejador de señales mejorado para Render.com
 def signal_handler(sig, frame):
@@ -39,8 +40,8 @@ def signal_handler(sig, frame):
         try:
             bot_thread.driver.quit()
             logging.info("[+] Navegador cerrado correctamente")
-        except:
-            pass
+        except Exception as e:
+            logging.error(f"[!] Error al cerrar navegador: {str(e)}")
     
     # Espera un momento antes de salir
     time.sleep(1)
@@ -277,11 +278,34 @@ def health_check():
             bot_thread = Thread(target=bot_logic, daemon=True)
             bot_thread.start()
     
-    return jsonify(status="ok", channel=CHANNEL_NAME, last_activity=time.time()), 200
+    # Devuelve una respuesta JSON válida
+    return {
+        "status": "ok",
+        "channel": CHANNEL_NAME,
+        "last_activity": time.time()
+    }, 200
+
+def monitor_bot_health():
+    """Monitorea la salud del bot en un hilo separado"""
+    global app_initialized
+    
+    # Espera a que la aplicación esté inicializada
+    while not app_initialized:
+        time.sleep(1)
+    
+    with app.app_context():
+        while True:
+            try:
+                # Usa el contexto de la aplicación para llamar a health_check
+                health_check()
+            except Exception as e:
+                logging.error(f"[!] Error en monitor_bot_health: {str(e)}")
+            
+            time.sleep(30)  # Verifica cada 30 segundos
 
 def main():
     """Versión mejorada que mantiene actividad constante para Render.com"""
-    global bot_thread, last_bot_activity
+    global bot_thread, last_bot_activity, app_initialized
     
     # Inicia el bot en segundo plano
     bot_thread = Thread(target=bot_logic, daemon=True)
@@ -293,12 +317,10 @@ def main():
     # Registra el endpoint de health check
     app.add_url_rule('/health', 'health_check', health_check)
     
-    # Inicia un hilo para monitorear la salud del bot
-    def monitor_bot_health():
-        while True:
-            time.sleep(30)  # Verifica cada 30 segundos
-            health_check()
+    # Marca que la aplicación está inicializada
+    app_initialized = True
     
+    # Inicia un hilo para monitorear la salud del bot
     monitor_thread = Thread(target=monitor_bot_health, daemon=True)
     monitor_thread.start()
     
