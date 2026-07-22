@@ -25,9 +25,25 @@ PASSWORD = os.getenv("PASSWORD")
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "forg1")
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "120"))
 
-# Manejador de señales para Render.com
+# Variable global para el bot
+bot_thread = None
+last_bot_activity = time.time()
+
+# Manejador de señales mejorado para Render.com
 def signal_handler(sig, frame):
-    logging.info("[*] Señal recibida, limpiando y saliendo...")
+    global bot_thread
+    logging.info(f"[*] Señal {sig} recibida, limpiando y saliendo...")
+    
+    # Cierra el navegador si está activo
+    if bot_thread and hasattr(bot_thread, 'driver') and bot_thread.driver:
+        try:
+            bot_thread.driver.quit()
+            logging.info("[+] Navegador cerrado correctamente")
+        except:
+            pass
+    
+    # Espera un momento antes de salir
+    time.sleep(1)
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, signal_handler)
@@ -194,13 +210,19 @@ def keep_page_active(driver):
     time.sleep(0.3)
     driver.execute_script(f"window.scrollBy(0, -{scroll_amount});")
     
+    global last_bot_activity
+    last_bot_activity = time.time()
     logging.info(f"[*] Manteniendo actividad en {CHANNEL_NAME} para generar puntos...")
 
 def bot_logic():
     """Lógica principal del bot"""
+    global bot_thread
+    
     driver = None
     try:
         driver = setup_browser()
+        bot_thread.driver = driver  # Guarda la referencia del driver
+        
         if not login_kick(driver):
             logging.error("[!] Login fallido, reiniciando en 30 segundos...")
             time.sleep(30)
@@ -232,39 +254,41 @@ def bot_logic():
     except Exception as e:
         logging.error(f"[!] Error: {str(e)}")
         if driver:
-            driver.quit()
+            try:
+                driver.quit()
+            except:
+                pass
         # Reinicia el proceso
         time.sleep(30)
         main()
 
+def health_check():
+    """Endpoint para UptimeRobot - mantiene el servicio despierto"""
+    global last_bot_activity
+    current_time = time.time()
+    
+    # Si el bot no ha mostrado actividad en los últimos 60 segundos
+    if current_time - last_bot_activity > 60:
+        logging.warning("[!] El bot de Selenium no muestra actividad. Reiniciando...")
+        # Intenta reiniciar el bot
+        global bot_thread
+        if bot_thread is None or not bot_thread.is_alive():
+            logging.info("[+] Reiniciando el bot de Selenium...")
+            bot_thread = Thread(target=bot_logic, daemon=True)
+            bot_thread.start()
+    
+    return jsonify(status="ok", channel=CHANNEL_NAME, last_activity=time.time()), 200
+
 def main():
     """Versión mejorada que mantiene actividad constante para Render.com"""
+    global bot_thread, last_bot_activity
+    
     # Inicia el bot en segundo plano
     bot_thread = Thread(target=bot_logic, daemon=True)
     bot_thread.start()
     
     # Inicia el servidor Flask
     port = int(os.environ.get("PORT", 10000))
-    
-    # Variable para controlar la salud del bot
-    last_bot_activity = time.time()
-    
-    # Función para verificar la salud del bot
-    def health_check():
-        nonlocal last_bot_activity
-        current_time = time.time()
-        
-        # Si el bot no ha mostrado actividad en los últimos 60 segundos
-        if current_time - last_bot_activity > 60:
-            logging.warning("[!] El bot de Selenium no muestra actividad. Reiniciando...")
-            # Intenta reiniciar el bot
-            if not bot_thread.is_alive():
-                new_thread = Thread(target=bot_logic, daemon=True)
-                new_thread.start()
-                globals()['bot_thread'] = new_thread
-        
-        last_bot_activity = current_time
-        return jsonify(status="ok", channel=CHANNEL_NAME, last_activity=time.time()), 200
     
     # Registra el endpoint de health check
     app.add_url_rule('/health', 'health_check', health_check)
