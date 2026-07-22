@@ -71,7 +71,7 @@ def login_kick(driver):
     
     # Tiempos reducidos para Render.com (evita "Application exited early")
     SHORT_TIMEOUT = 8
-    LONG_TIMEOUT = 15
+    LONG_TIMEOUT = 12
     
     try:
         # 1. Busca el botón "Log In" con tiempo reducido
@@ -89,7 +89,6 @@ def login_kick(driver):
                 logging.info("[+] Botón 'Log In' encontrado (por data-test-id)")
             except Exception as e:
                 logging.error(f"[!] Error: No se encontró el botón de login: {str(e)}")
-                # Render necesita capturas específicas para diagnóstico
                 driver.save_screenshot("no_login_button.png")
                 raise TimeoutError("No login button found")
         
@@ -264,7 +263,7 @@ def main():
         if current_time - last_bot_activity > 60:
             logging.warning("[!] El bot de Selenium no muestra actividad. Reiniciando...")
             # Intenta reiniciar el bot
-            if 'bot_thread' in globals() and not bot_thread.is_alive():
+            if not bot_thread.is_alive():
                 new_thread = Thread(target=bot_logic, daemon=True)
                 new_thread.start()
                 globals()['bot_thread'] = new_thread
@@ -286,3 +285,6 @@ def main():
     
     # Inicia el servidor Flask
     app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    main()
