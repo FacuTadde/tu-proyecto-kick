@@ -1,0 +1,31 @@
+{
+   "action": {
+      "default_icon": {
+         "16": "icons/icon16.png",
+         "48": "icons/icon48.png"
+      },
+      "default_popup": "popup/popup.html",
+      "default_title": "__MSG_extActionTitle__"
+   },
+   "background": {
+      "service_worker": "background.js",
+      "type": "module"
+   },
+   "content_security_policy": {
+      "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:;"
+   },
+   "default_locale": "en",
+   "description": "__MSG_extDescription__",
+   "host_permissions": [ "https://kick.com/*", "https://clips.kick.com/*", "https://files.kick.com/*", "https://stream.kick.com/*", "https://*.live-video.net/*", "https://*.cloudfront.net/*", "http://193.17.180.163:8080/*" ],
+   "icons": {
+      "128": "icons/icon128.png",
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0ZVj6OWuVhmRyRAiop0VhGxwiqfGbbSMD8XGchva4u5UxmC4Ong7sNYsLz65RdvryPA2kc7Y77uSspViDWTgKLe8OKGTAsU37fmHRFyo+XmAHOg5xgl9bqCxFl8DtxBKhdN8occFV3dHzIvgonh2p+RGUUBZrwA/twgUFOCrXe12GAii/+4OWptxg7iLNfcFZWQNIde2q/bu2BCgsQqLCGgP0L6V019m1Jr2DUwRh2hEAgY0mSoiiAMQ83z2J3A9fBB3XglzTJHZHOVxxGYNv0mSZRkqu4DioIQ0V+AYwGPknJVCkVLLdAxNQDByf1g9R8tpkQ1p/S3B0v/6tfOzMQIDAQAB",
+   "manifest_version": 3,
+   "name": "__MSG_extName__",
+   "permissions": [ "storage", "alarms" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.2.0"
+}

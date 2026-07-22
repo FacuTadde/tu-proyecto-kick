@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kick-farmer
+    runtime: python
+    env: production
+    region: oregon
+    plan: free
+    buildCommand: "apt-get update && apt-get install -y chromium-browser xvfb && pip install -r requirements.txt"
+    startCommand: "sh start.sh"
+    envVars:
+      - key: USERNAME
+        fromSecret: KICK_USERNAME
+      - key: PASSWORD
+        fromSecret: KICK_PASSWORD
+      - key: CHANNEL_NAME
+        value: forg1
+      - key: CHECK_INTERVAL
+        value: "120"
