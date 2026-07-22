@@ -5,8 +5,8 @@ services:
     env: production
     region: oregon
     plan: free
-    buildCommand: "apt-get update && apt-get install -y chromium-browser xvfb && pip install -r requirements.txt"
-    startCommand: "sh start.sh"
+    buildCommand: "apt-get update && apt-get install -y chromium-browser xvfb libnss3 libnspr4 libatk1.0-0 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxi6 libxt6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 libatk-bridge2.0-0 libcups2 libdbus-1-3 libdrm2 libfontconfig1 libgbm1 libgtk-3-0 libice6 libpangocairo-1.0-0 libsm6 libwayland-client0 libxkbcommon0 wget && pip install -r requirements.txt"
+    startCommand: "xvfb-run -a python main.py"
     envVars:
       - key: USERNAME
         fromSecret: KICK_USERNAME
@@ -16,3 +16,7 @@ services:
         value: forg1
       - key: CHECK_INTERVAL
         value: "120"
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: "10000"
