@@ -244,14 +244,45 @@ def health_check():
     return {"status": "ok", "channel": CHANNEL_NAME}, 200
 
 def main():
+    """Versión mejorada que mantiene actividad constante para Render.com"""
     # Inicia el bot en segundo plano
-    from threading import Thread
     bot_thread = Thread(target=bot_logic, daemon=True)
     bot_thread.start()
     
-    # Inicia el servidor Flask en el puerto asignado por Render.com
+    # Inicia el servidor Flask
     port = int(os.environ.get("PORT", 10000))
+    
+    # Variable para controlar la salud del bot
+    last_bot_activity = time.time()
+    
+    # Función para verificar la salud del bot
+    def health_check():
+        nonlocal last_bot_activity
+        current_time = time.time()
+        
+        # Si el bot no ha mostrado actividad en los últimos 60 segundos
+        if current_time - last_bot_activity > 60:
+            logging.warning("[!] El bot de Selenium no muestra actividad. Reiniciando...")
+            # Intenta reiniciar el bot
+            if 'bot_thread' in globals() and not bot_thread.is_alive():
+                new_thread = Thread(target=bot_logic, daemon=True)
+                new_thread.start()
+                globals()['bot_thread'] = new_thread
+        
+        last_bot_activity = current_time
+        return jsonify(status="ok", channel=CHANNEL_NAME, last_activity=time.time()), 200
+    
+    # Registra el endpoint de health check
+    app.add_url_rule('/health', 'health_check', health_check)
+    
+    # Inicia un hilo para monitorear la salud del bot
+    def monitor_bot_health():
+        while True:
+            time.sleep(30)  # Verifica cada 30 segundos
+            health_check()
+    
+    monitor_thread = Thread(target=monitor_bot_health, daemon=True)
+    monitor_thread.start()
+    
+    # Inicia el servidor Flask
     app.run(host="0.0.0.0", port=port)
-
-if __name__ == "__main__":
-    main()
