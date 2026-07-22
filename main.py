@@ -29,11 +29,12 @@ CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "120"))
 bot_thread = None
 last_bot_activity = time.time()
 app_initialized = False
+health_check_counter = 0
 
 # Manejador de señales mejorado para Render.com
 def signal_handler(sig, frame):
     global bot_thread
-    logging.info(f"[*] Señal {sig} recibida, limpiando y saliendo...")
+    logging.info(f"[*] Señal {sig} (SIGTERM) recibida, limpiando y saliendo...")
     
     # Cierra el navegador si está activo
     if bot_thread and hasattr(bot_thread, 'driver') and bot_thread.driver:
@@ -265,7 +266,8 @@ def bot_logic():
 
 def health_check():
     """Endpoint para UptimeRobot - mantiene el servicio despierto"""
-    global last_bot_activity
+    global last_bot_activity, health_check_counter
+    health_check_counter += 1
     current_time = time.time()
     
     # Si el bot no ha mostrado actividad en los últimos 60 segundos
@@ -278,11 +280,15 @@ def health_check():
             bot_thread = Thread(target=bot_logic, daemon=True)
             bot_thread.start()
     
-    # Devuelve una respuesta JSON válida
+    # Actualiza el contador de actividad para mantener el proceso principal ocupado
+    activity_log = f"Health check #{health_check_counter} - Bot activity: {time.time() - last_bot_activity:.1f}s ago"
+    logging.info(activity_log)
+    
     return {
         "status": "ok",
         "channel": CHANNEL_NAME,
-        "last_activity": time.time()
+        "last_activity": time.time(),
+        "health_check_count": health_check_counter
     }, 200
 
 def monitor_bot_health():
@@ -305,7 +311,7 @@ def monitor_bot_health():
 
 def main():
     """Versión mejorada que mantiene actividad constante para Render.com"""
-    global bot_thread, last_bot_activity, app_initialized
+    global bot_thread, last_bot_activity, app_initialized, health_check_counter
     
     # Inicia el bot en segundo plano
     bot_thread = Thread(target=bot_logic, daemon=True)
@@ -323,6 +329,15 @@ def main():
     # Inicia un hilo para monitorear la salud del bot
     monitor_thread = Thread(target=monitor_bot_health, daemon=True)
     monitor_thread.start()
+    
+    # Inicia un hilo para mantener actividad constante en el proceso principal
+    def keep_process_active():
+        while True:
+            time.sleep(15)  # Verifica cada 15 segundos
+            logging.info(f"[.] Manteniendo proceso activo (health checks: {health_check_counter})")
+    
+    activity_thread = Thread(target=keep_process_active, daemon=True)
+    activity_thread.start()
     
     # Inicia el servidor Flask
     app.run(host="0.0.0.0", port=port)
