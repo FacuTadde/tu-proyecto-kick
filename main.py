@@ -237,11 +237,6 @@ def bot_logic():
         time.sleep(30)
         main()
 
-@app.route('/health')
-def health_check():
-    """Endpoint para UptimeRobot - mantiene el servicio despierto"""
-    return {"status": "ok", "channel": CHANNEL_NAME}, 200
-
 def main():
     """Versión mejorada que mantiene actividad constante para Render.com"""
     # Inicia el bot en segundo plano
